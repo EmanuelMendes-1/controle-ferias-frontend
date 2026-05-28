@@ -1,407 +1,296 @@
-exigirLogin();
+let usuarioLogado = null;
+let isAdmin = false;
 
-const $ = (sel) => document.querySelector(sel);
-const toast = $('#toast');
-
-const sessao = obterSessao();
-if (sessao) {
-    $('#usuario-logado').textContent = `${sessao.nome} (${sessao.login})`;
-}
-
-function mostrarToast(msg, tipo = 'ok') {
-    toast.textContent = msg;
-    toast.className = `toast ${tipo}`;
-    setTimeout(() => toast.classList.add('hidden'), 3500);
-}
-
-function formatarData(iso) {
-    if (!iso) return '—';
-    const [y, m, d] = iso.split('-');
-    return `${d}/${m}/${y}`;
-}
-
-function badgeStatus(status) {
-    const map = {
-        PENDENTE: 'badge-pendente',
-        APROVADA: 'badge-aprovada',
-        REJEITADA: 'badge-rejeitada'
-    };
-    return `<span class="badge ${map[status] || ''}">${status}</span>`;
-}
-
-let perfisCache = [];
-let funcionariosCache = [];
-
-async function carregarPerfis() {
-    const lista = await apiAutenticada('/perfis');
-    perfisCache = lista;
-
-    const selectTipo = $('#tipo-funcionario');
-    selectTipo.innerHTML = lista.map(p =>
-        `<option value="${p.id}">${p.descricao}</option>`
-    ).join('');
-
-    const container = $('#lista-perfis');
-    if (!lista.length) {
-        container.innerHTML = '<p class="vazio">Nenhuma função/perfil cadastrado.</p>';
-        return;
-    }
-
-    container.innerHTML = lista.map(p => `
-        <div class="item">
-            <div class="item-info">
-                <strong>${p.descricao}</strong>
-                <span>ID: ${p.id}</span>
-            </div>
-            <div class="acoes-inline">
-                <button class="btn-editar" data-tipo="perfil" data-id="${p.id}">Editar</button>
-                <button class="btn-excluir" data-tipo="perfil" data-id="${p.id}">Excluir</button>
-            </div>
-        </div>
-    `).join('');
-}
-
-async function carregarUsuarios() {
-    const lista = await apiAutenticada('/usuarios');
-    const container = $('#lista-usuarios');
-
-    if (!lista.length) {
-        container.innerHTML = '<p class="vazio">Nenhum usuário cadastrado.</p>';
-        return;
-    }
-
-    container.innerHTML = lista.map(u => `
-        <div class="item">
-            <div class="item-info">
-                <strong>${u.nome} — ${u.login}</strong>
-                <span>ID: ${u.id}</span>
-            </div>
-            <div class="acoes-inline">
-                <button class="btn-editar" data-tipo="usuario" data-id="${u.id}">Editar</button>
-                <button class="btn-excluir" data-tipo="usuario" data-id="${u.id}">Excluir</button>
-            </div>
-        </div>
-    `).join('');
-}
-
-function resetPerfilForm() {
-    $('#perfil-id').value = '';
-    $('#perfil-descricao').value = '';
-    $('#btn-salvar-perfil').textContent = 'Salvar';
-}
-
-function resetUsuarioForm() {
-    $('#usuario-id').value = '';
-    $('#usuario-nome').value = '';
-    $('#usuario-login').value = '';
-    $('#usuario-senha').value = '';
-    $('#btn-salvar-usuario').textContent = 'Salvar usuário';
-}
-
-function resetFuncionarioForm() {
-    $('#funcionario-id').value = '';
-    $('#nome-funcionario').value = '';
-    $('#cpf-funcionario').value = '';
-    $('#nascimento-funcionario').value = '';
-    $('#telefone-funcionario').value = '';
-    if (perfisCache.length) {
-        $('#tipo-funcionario').value = String(perfisCache[0].id);
-    }
-    $('#btn-salvar-funcionario').textContent = 'Salvar pessoa';
-}
-
-function obterDataInicio() {
-    return montarDataIso($('#inicio-dia'), $('#inicio-mes'), $('#inicio-ano'));
-}
-
-function obterDataFim() {
-    return montarDataIso($('#fim-dia'), $('#fim-mes'), $('#fim-ano'));
-}
-
-async function carregarFuncionarios() {
-    const lista = await apiAutenticada('/funcionarios');
-    funcionariosCache = lista;
-    const container = $('#lista-funcionarios');
-    const select = $('#funcionario-select');
-
-    if (!lista.length) {
-        container.innerHTML = '<p class="vazio">Nenhuma pessoa cadastrada.</p>';
-        select.innerHTML = '<option value="">—</option>';
-        return;
-    }
-
-    container.innerHTML = lista.map(f => `
-        <div class="item">
-            <div class="item-info">
-                <strong>${f.nome}</strong>
-                <span>CPF: ${f.cpf} · ${f.pessoaTipoDescricao || '—'} · Tel: ${f.telefone}</span>
-            </div>
-            <div class="acoes-inline">
-                <button class="btn-editar" data-tipo="funcionario" data-id="${f.id}">Editar</button>
-                <button class="btn-excluir" data-tipo="funcionario" data-id="${f.id}">Excluir</button>
-            </div>
-        </div>
-    `).join('');
-
-    select.innerHTML = lista.map(f =>
-        `<option value="${f.id}">${f.nome} (${f.pessoaTipoDescricao || 'pessoa'})</option>`
-    ).join('');
-}
-
-async function carregarSolicitacoes() {
-    const lista = await apiAutenticada('/solicitacoes');
-    const container = $('#lista-solicitacoes');
-
-    if (!lista.length) {
-        container.innerHTML = '<p class="vazio">Nenhuma solicitação ainda.</p>';
-        return;
-    }
-
-    container.innerHTML = lista.map(s => `
-        <div class="item" data-id="${s.id}">
-            <div class="item-info">
-                <strong>${s.funcionarioNome}</strong>
-                <span>${formatarData(s.dataInicio)} → ${formatarData(s.dataFim)} · ${s.diasSolicitados} dias</span>
-            </div>
-            ${badgeStatus(s.status)}
-            ${s.status === 'PENDENTE' ? `
-                <div class="acoes">
-                    <button class="btn-aprovar" data-acao="aprovar" data-id="${s.id}">Aprovar</button>
-                    <button class="btn-rejeitar" data-acao="rejeitar" data-id="${s.id}">Rejeitar</button>
-                </div>
-            ` : ''}
-        </div>
-    `).join('');
-}
-
-async function atualizarDiasCalculados() {
-    const inicio = obterDataInicio();
-    const fim = obterDataFim();
-    const el = $('#dias-calculados');
-
-    if (!inicio || !fim) {
-        el.textContent = '—';
-        return;
-    }
-
-    try {
-        const { dias } = await apiAutenticada(`/calcular-dias?dataInicio=${inicio}&dataFim=${fim}`);
-        el.textContent = dias;
-    } catch {
-        el.textContent = '—';
-    }
-}
-
-$('#btn-sair').addEventListener('click', async () => {
-    try {
-        await apiAutenticada('/auth/logout', { method: 'POST' });
-    } catch {
-        /* ignora */
-    }
-    limparSessao();
-    window.location.href = 'login.html';
-});
-
-$('#form-funcionario').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    try {
-        const id = $('#funcionario-id').value ? parseInt($('#funcionario-id').value, 10) : null;
-        const payload = {
-            nome: $('#nome-funcionario').value,
-            cpf: $('#cpf-funcionario').value,
-            nascimento: $('#nascimento-funcionario').value,
-            telefone: $('#telefone-funcionario').value,
-            pessoaTipoId: parseInt($('#tipo-funcionario').value, 10)
-        };
-
-        if (id) {
-            await apiAutenticada(`/funcionarios/${id}`, {
-                method: 'PUT',
-                body: JSON.stringify(payload)
-            });
-            mostrarToast('Pessoa atualizada!');
-        } else {
-            await apiAutenticada('/funcionarios', {
-                method: 'POST',
-                body: JSON.stringify(payload)
-            });
-            mostrarToast('Pessoa cadastrada!');
+function carregarUsuarioLogado() {
+    const usuarioStr = localStorage.getItem('usuario');
+    if (usuarioStr) {
+        usuarioLogado = JSON.parse(usuarioStr);
+        isAdmin = usuarioLogado.id === 1;
+        const usuarioSpan = document.getElementById('usuario-logado');
+        if (usuarioSpan) {
+            usuarioSpan.textContent = `${usuarioLogado.nome} (${isAdmin ? 'Admin' : 'Funcionário'})`;
         }
-
-        resetFuncionarioForm();
-        await Promise.all([carregarFuncionarios(), carregarSolicitacoes()]);
-    } catch (err) {
-        mostrarToast(err.message, 'erro');
+        ajustarVisibilidadePorPerfil();
     }
-});
+}
 
-$('#btn-cancelar-funcionario').addEventListener('click', resetFuncionarioForm);
-
-$('#form-perfil').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    try {
-        const id = $('#perfil-id').value ? parseInt($('#perfil-id').value, 10) : null;
-        const payload = { descricao: $('#perfil-descricao').value };
-
-        if (id) {
-            await apiAutenticada(`/perfis/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
-            mostrarToast('Perfil atualizado!');
-        } else {
-            await apiAutenticada('/perfis', { method: 'POST', body: JSON.stringify(payload) });
-            mostrarToast('Perfil criado!');
-        }
-
-        resetPerfilForm();
-        await carregarPerfis();
-    } catch (err) {
-        mostrarToast(err.message, 'erro');
-    }
-});
-
-$('#btn-cancelar-perfil').addEventListener('click', resetPerfilForm);
-
-$('#form-usuario').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    try {
-        const id = $('#usuario-id').value ? parseInt($('#usuario-id').value, 10) : null;
-        const payload = {
-            nome: $('#usuario-nome').value,
-            login: $('#usuario-login').value
-        };
-        const senha = $('#usuario-senha').value;
-        if (!id || senha) payload.senha = senha;
-
-        if (id) {
-            await apiAutenticada(`/usuarios/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
-            mostrarToast('Usuário atualizado!');
-        } else {
-            if (!payload.senha) throw new Error('Senha é obrigatória ao criar usuário');
-            await apiAutenticada('/usuarios', { method: 'POST', body: JSON.stringify(payload) });
-            mostrarToast('Usuário criado!');
-        }
-
-        resetUsuarioForm();
-        await carregarUsuarios();
-    } catch (err) {
-        mostrarToast(err.message, 'erro');
-    }
-});
-
-$('#btn-cancelar-usuario').addEventListener('click', resetUsuarioForm);
-
-document.body.addEventListener('click', async (e) => {
-    const btn = e.target.closest('[data-tipo]');
-    if (!btn) return;
-
-    const tipo = btn.dataset.tipo;
-    const id = btn.dataset.id;
-
-    try {
-        if (tipo === 'perfil') {
-            const perfil = perfisCache.find(p => String(p.id) === String(id));
-            if (btn.classList.contains('btn-editar')) {
-                $('#perfil-id').value = perfil.id;
-                $('#perfil-descricao').value = perfil.descricao;
-                $('#btn-salvar-perfil').textContent = 'Atualizar';
-                return;
-            }
-            if (btn.classList.contains('btn-excluir')) {
-                if (!confirm(`Excluir perfil "${perfil.descricao}"?`)) return;
-                await apiAutenticada(`/perfis/${perfil.id}`, { method: 'DELETE' });
-                mostrarToast('Perfil excluído!');
-                await carregarPerfis();
-            }
-            return;
-        }
-
-        if (tipo === 'usuario') {
-            if (btn.classList.contains('btn-editar')) {
-                const u = await apiAutenticada(`/usuarios/${id}`);
-                $('#usuario-id').value = u.id;
-                $('#usuario-nome').value = u.nome;
-                $('#usuario-login').value = u.login;
-                $('#usuario-senha').value = '';
-                $('#btn-salvar-usuario').textContent = 'Atualizar usuário';
-                return;
-            }
-            if (btn.classList.contains('btn-excluir')) {
-                if (!confirm('Excluir este usuário?')) return;
-                await apiAutenticada(`/usuarios/${id}`, { method: 'DELETE' });
-                mostrarToast('Usuário excluído!');
-                await carregarUsuarios();
-            }
-            return;
-        }
-
-        if (tipo === 'funcionario') {
-            const f = funcionariosCache.find(p => String(p.id) === String(id));
-            if (btn.classList.contains('btn-editar')) {
-                $('#funcionario-id').value = f.id;
-                $('#nome-funcionario').value = f.nome;
-                $('#cpf-funcionario').value = f.cpf;
-                $('#nascimento-funcionario').value = f.nascimento;
-                $('#telefone-funcionario').value = f.telefone;
-                if (f.pessoaTipoId) $('#tipo-funcionario').value = String(f.pessoaTipoId);
-                $('#btn-salvar-funcionario').textContent = 'Atualizar pessoa';
-                return;
-            }
-            if (btn.classList.contains('btn-excluir')) {
-                if (!confirm(`Excluir "${f.nome}"?`)) return;
-                await apiAutenticada(`/funcionarios/${id}`, { method: 'DELETE' });
-                mostrarToast('Pessoa excluída!');
-                await carregarFuncionarios();
-            }
-        }
-    } catch (err) {
-        mostrarToast(err.message, 'erro');
-    }
-});
-
-$('#form-solicitacao').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    try {
-        await apiAutenticada('/solicitacoes', {
-            method: 'POST',
-            body: JSON.stringify({
-                funcionarioId: parseInt($('#funcionario-select').value, 10),
-                dataInicio: obterDataInicio(),
-                dataFim: obterDataFim()
-            })
+function ajustarVisibilidadePorPerfil() {
+    if (!isAdmin) {
+        const secoesAdmin = ['perfis-section', 'usuarios-section', 'funcionarios-section'];
+        secoesAdmin.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = 'none';
         });
-        e.target.reset();
-        inicializarDatasFerias(atualizarDiasCalculados);
-        $('#dias-calculados').textContent = '—';
-        mostrarToast('Solicitação criada! Aguardando aprovação.');
-        await carregarSolicitacoes();
-    } catch (err) {
-        mostrarToast(err.message, 'erro');
-    }
-});
-
-$('#lista-solicitacoes').addEventListener('click', async (e) => {
-    const btn = e.target.closest('[data-acao]');
-    if (!btn) return;
-
-    const id = btn.dataset.id;
-    const acao = btn.dataset.acao;
-
-    try {
-        await apiAutenticada(`/solicitacoes/${id}/${acao}`, { method: 'POST' });
-        mostrarToast(acao === 'aprovar' ? 'Férias aprovadas!' : 'Solicitação rejeitada.');
-        await carregarSolicitacoes();
-    } catch (err) {
-        mostrarToast(err.message, 'erro');
-    }
-});
-
-async function init() {
-    inicializarDatasFerias(atualizarDiasCalculados);
-    try {
-        await carregarPerfis();
-        await Promise.all([carregarUsuarios(), carregarFuncionarios(), carregarSolicitacoes()]);
-    } catch {
-        mostrarToast('Backend offline ou MySQL indisponível. Execute database/Projeto_Ferias.sql', 'erro');
     }
 }
 
-init();
+function mostrarToast(mensagem, tipo = 'info') {
+    const toast = document.getElementById('toast');
+    if (!toast) return;
+    toast.textContent = mensagem;
+    toast.className = `toast ${tipo} show`;
+    setTimeout(() => {
+        toast.className = 'toast hidden';
+    }, 3000);
+}
+
+async function listarPerfis() {
+    try {
+        const response = await fetch(`${API_URL}/perfis`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (!response.ok) throw new Error('Erro ao carregar perfis');
+        const data = await response.json();
+        const container = document.getElementById('lista-perfis');
+        if (!container) return;
+        if (data.length === 0) {
+            container.innerHTML = '<p>Nenhum perfil cadastrado.</p>';
+            return;
+        }
+        container.innerHTML = data.map(p => `
+            <div class="item-lista">
+                <span>${p.descricao}</span>
+                <div>
+                    <button onclick="editarPerfil(${p.pessoa_tipo_id})" class="btn-editar">Editar</button>
+                    <button onclick="excluirPerfil(${p.pessoa_tipo_id})" class="btn-excluir">Excluir</button>
+                </div>
+            </div>
+        `).join('');
+    } catch (error) {
+        console.error('Erro:', error);
+    }
+}
+
+async function listarUsuarios() {
+    try {
+        const response = await fetch(`${API_URL}/usuarios`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (!response.ok) throw new Error('Erro ao carregar usuários');
+        const data = await response.json();
+        const container = document.getElementById('lista-usuarios');
+        if (!container) return;
+        if (data.length === 0) {
+            container.innerHTML = '<p>Nenhum usuário cadastrado.</p>';
+            return;
+        }
+        container.innerHTML = data.map(u => `
+            <div class="item-lista">
+                <span>${u.nome} (${u.login})</span>
+                <div>
+                    <button onclick="editarUsuario(${u.usuario_id})" class="btn-editar">Editar</button>
+                    <button onclick="excluirUsuario(${u.usuario_id})" class="btn-excluir">Excluir</button>
+                </div>
+            </div>
+        `).join('');
+    } catch (error) {
+        console.error('Erro:', error);
+    }
+}
+
+async function listarFuncionarios() {
+    try {
+        const response = await fetch(`${API_URL}/pessoas`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (!response.ok) throw new Error('Erro ao carregar funcionários');
+        const data = await response.json();
+        const container = document.getElementById('lista-funcionarios');
+        if (!container) return;
+        if (data.length === 0) {
+            container.innerHTML = '<p>Nenhum funcionário cadastrado.</p>';
+            return;
+        }
+        container.innerHTML = data.map(f => `
+            <div class="item-lista">
+                <span>${f.nome} - ${f.cpf || 'SEM CPF'}</span>
+                <div>
+                    <button onclick="editarFuncionario(${f.pessoa_id})" class="btn-editar">Editar</button>
+                    <button onclick="excluirFuncionario(${f.pessoa_id})" class="btn-excluir">Excluir</button>
+                </div>
+            </div>
+        `).join('');
+        const select = document.getElementById('funcionario-select');
+        if (select) {
+            select.innerHTML = '<option value="">Selecione um funcionário</option>' + data.map(f => `<option value="${f.pessoa_id}">${f.nome}</option>`).join('');
+        }
+    } catch (error) {
+        console.error('Erro:', error);
+    }
+}
+
+async function listarSolicitacoes() {
+    try {
+        let data;
+        if (isAdmin) {
+            data = await listarTodasSolicitacoes();
+        } else {
+            data = await listarMinhasSolicitacoes();
+        }
+        const container = document.getElementById('lista-solicitacoes');
+        if (!container) return;
+        if (!data || data.length === 0) {
+            container.innerHTML = '<p>Nenhuma solicitação encontrada.</p>';
+            return;
+        }
+        container.innerHTML = data.map(s => `
+            <div class="solicitacao-card ${s.status}">
+                <div class="solicitacao-info">
+                    <strong>${s.funcionarioNome || `Funcionário #${s.funcionarioId}`}</strong>
+                    <span class="status status-${s.status}">
+                        ${s.status === 'pendente' ? '⏳ Pendente' : s.status === 'aprovado' ? '✅ Aprovado' : '❌ Recusado'}
+                    </span>
+                </div>
+                <div class="solicitacao-datas">
+                    📅 ${formatarData(s.dataInicio)} até ${formatarData(s.dataFim)}
+                    (${calcularDias(s.dataInicio, s.dataFim)} dias)
+                </div>
+                ${s.observacao ? `<div class="solicitacao-obs">📝 ${s.observacao}</div>` : ''}
+                ${s.status === 'pendente' && isAdmin ? `
+                    <div class="solicitacao-acoes">
+                        <button onclick="aprovarSolicitacao(${s.id})" class="btn-aprovar">✓ Aprovar</button>
+                        <button onclick="recusarSolicitacao(${s.id})" class="btn-recusar">✗ Recusar</button>
+                    </div>
+                ` : ''}
+            </div>
+        `).join('');
+    } catch (error) {
+        console.error('Erro ao listar solicitações:', error);
+        const container = document.getElementById('lista-solicitacoes');
+        if (container) {
+            container.innerHTML = `<p class="error">Erro ao carregar solicitações: ${error.message}</p>`;
+        }
+    }
+}
+
+function formatarData(dataStr) {
+    const data = new Date(dataStr);
+    return data.toLocaleDateString('pt-BR');
+}
+
+function popularDatas() {
+    const dias = Array.from({ length: 31 }, (_, i) => i + 1);
+    const meses = Array.from({ length: 12 }, (_, i) => i + 1);
+    const anoAtual = new Date().getFullYear();
+    const anos = Array.from({ length: 5 }, (_, i) => anoAtual + i);
+    
+    const selectsDia = ['inicio-dia', 'fim-dia'];
+    const selectsMes = ['inicio-mes', 'fim-mes'];
+    const selectsAno = ['inicio-ano', 'fim-ano'];
+    
+    selectsDia.forEach(id => {
+        const select = document.getElementById(id);
+        if (select) {
+            select.innerHTML = dias.map(d => `<option value="${d}">${d}</option>`).join('');
+        }
+    });
+    
+    selectsMes.forEach(id => {
+        const select = document.getElementById(id);
+        if (select) {
+            select.innerHTML = meses.map(m => `<option value="${m}">${m}</option>`).join('');
+        }
+    });
+    
+    selectsAno.forEach(id => {
+        const select = document.getElementById(id);
+        if (select) {
+            select.innerHTML = anos.map(a => `<option value="${a}">${a}</option>`).join('');
+        }
+    });
+    
+    const inicioDia = document.getElementById('inicio-dia');
+    const inicioMes = document.getElementById('inicio-mes');
+    const inicioAno = document.getElementById('inicio-ano');
+    const fimDia = document.getElementById('fim-dia');
+    const fimMes = document.getElementById('fim-mes');
+    const fimAno = document.getElementById('fim-ano');
+    const diasCountSpan = document.getElementById('dias-calculados');
+    
+    function atualizarDias() {
+        if (inicioDia && inicioMes && inicioAno && fimDia && fimMes && fimAno && diasCountSpan) {
+            const dataInicio = `${inicioAno.value}-${inicioMes.value}-${inicioDia.value}`;
+            const dataFim = `${fimAno.value}-${fimMes.value}-${fimDia.value}`;
+            if (dataInicio && dataFim) {
+                const dias = calcularDias(dataInicio, dataFim);
+                diasCountSpan.textContent = dias;
+                if (dias > 35) {
+                    diasCountSpan.style.color = 'red';
+                } else {
+                    diasCountSpan.style.color = 'green';
+                }
+            }
+        }
+    }
+    
+    const selects = [inicioDia, inicioMes, inicioAno, fimDia, fimMes, fimAno];
+    selects.forEach(select => {
+        if (select) select.addEventListener('change', atualizarDias);
+    });
+}
+
+window.aprovarSolicitacao = async function(id) {
+    if (confirm('Aprovar esta solicitação de férias?')) {
+        try {
+            await aprovarSolicitacao(id);
+            mostrarToast('Solicitação aprovada!', 'success');
+            listarSolicitacoes();
+        } catch (error) {
+            mostrarToast(error.message, 'error');
+        }
+    }
+};
+
+window.recusarSolicitacao = async function(id) {
+    const motivo = prompt('Motivo da recusa:');
+    if (motivo !== null) {
+        try {
+            await recusarSolicitacao(id, motivo);
+            mostrarToast('Solicitação recusada!', 'success');
+            listarSolicitacoes();
+        } catch (error) {
+            mostrarToast(error.message, 'error');
+        }
+    }
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+    carregarUsuarioLogado();
+    listarPerfis();
+    listarUsuarios();
+    listarFuncionarios();
+    listarSolicitacoes();
+    popularDatas();
+    
+    const btnSair = document.getElementById('btn-sair');
+    if (btnSair) {
+        btnSair.addEventListener('click', () => {
+            localStorage.removeItem('token');
+            localStorage.removeItem('usuario');
+            window.location.href = 'login.html';
+        });
+    }
+    
+    const formSolicitacao = document.getElementById('form-solicitacao');
+    if (formSolicitacao) {
+        formSolicitacao.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const funcionarioId = document.getElementById('funcionario-select').value;
+            const dataInicio = `${document.getElementById('inicio-ano').value}-${document.getElementById('inicio-mes').value}-${document.getElementById('inicio-dia').value}`;
+            const dataFim = `${document.getElementById('fim-ano').value}-${document.getElementById('fim-mes').value}-${document.getElementById('fim-dia').value}`;
+            const dias = calcularDias(dataInicio, dataFim);
+            if (dias > 35) {
+                mostrarToast('O período de férias não pode ultrapassar 35 dias', 'error');
+                return;
+            }
+            try {
+                const resultado = await criarSolicitacao(dataInicio, dataFim, '');
+                mostrarToast('Solicitação enviada com sucesso!', 'success');
+                formSolicitacao.reset();
+                listarSolicitacoes();
+            } catch (error) {
+                mostrarToast(error.message, 'error');
+            }
+        });
+    }
+});
