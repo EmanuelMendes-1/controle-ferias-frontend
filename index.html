@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Controle de Férias</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header class="header">
+        <div class="header-top">
+            <div>
+                <h1>Controle de Férias</h1>
+                <p>Gestão de pessoas, férias, usuários e funções</p>
+            </div>
+            <div class="header-user">
+                <span id="usuario-logado"></span>
+                <button type="button" id="btn-sair" class="btn-sair">Sair</button>
+            </div>
+        </div>
+    </header>
+
+    <main class="container">
+        <section class="card">
+            <h2>Funções / Perfis (tbPessoaTipo)</h2>
+            <form id="form-perfil" class="form-inline">
+                <input type="hidden" id="perfil-id">
+                <input type="text" id="perfil-descricao" placeholder="Descrição (ex: FUNCIONARIO)" required>
+                <button type="submit" id="btn-salvar-perfil">Salvar</button>
+                <button type="button" id="btn-cancelar-perfil" class="btn-secundario">Cancelar</button>
+            </form>
+            <div id="lista-perfis" class="lista"></div>
+        </section>
+
+        <section class="card">
+            <h2>Usuários (seguranca.tbUsuarios)</h2>
+            <form id="form-usuario" class="form-grid">
+                <input type="hidden" id="usuario-id">
+                <label>
+                    Nome
+                    <input type="text" id="usuario-nome" placeholder="Nome completo" required>
+                </label>
+                <label>
+                    Login
+                    <input type="text" id="usuario-login" placeholder="ex: admin" required>
+                </label>
+                <label>
+                    Senha <span class="hint">(no editar, deixe em branco para manter)</span>
+                    <input type="password" id="usuario-senha" placeholder="••••••••">
+                </label>
+                <div class="acoes-form">
+                    <button type="submit" id="btn-salvar-usuario" class="btn-primary">Salvar usuário</button>
+                    <button type="button" id="btn-cancelar-usuario" class="btn-secundario">Cancelar</button>
+                </div>
+            </form>
+            <div id="lista-usuarios" class="lista"></div>
+        </section>
+
+        <section class="card">
+            <h2>Pessoas / Funcionários (cadastro.tbPessoas)</h2>
+            <form id="form-funcionario" class="form-grid">
+                <input type="hidden" id="funcionario-id">
+                <label>
+                    Nome
+                    <input type="text" id="nome-funcionario" placeholder="Nome" required>
+                </label>
+                <label>
+                    CPF
+                    <input type="text" id="cpf-funcionario" placeholder="00000000000" required maxlength="14">
+                </label>
+                <label>
+                    Nascimento
+                    <input type="date" id="nascimento-funcionario" required>
+                </label>
+                <label>
+                    Telefone
+                    <input type="text" id="telefone-funcionario" placeholder="85999990000" required>
+                </label>
+                <label>
+                    Tipo / Função
+                    <select id="tipo-funcionario" required></select>
+                </label>
+                <div class="acoes-form">
+                    <button type="submit" id="btn-salvar-funcionario" class="btn-primary">Salvar pessoa</button>
+                    <button type="button" id="btn-cancelar-funcionario" class="btn-secundario">Cancelar</button>
+                </div>
+            </form>
+            <div id="lista-funcionarios" class="lista"></div>
+        </section>
+
+        <section class="card">
+            <h2>Nova solicitação de férias (tbFerias)</h2>
+            <form id="form-solicitacao" class="form-grid">
+                <label>
+                    Funcionário
+                    <select id="funcionario-select" required></select>
+                </label>
+                <fieldset class="grupo-data">
+                    <legend>Data início</legend>
+                    <div class="data-campos">
+                        <label>Dia <select id="inicio-dia"></select></label>
+                        <label>Mês <select id="inicio-mes"></select></label>
+                        <label>Ano <select id="inicio-ano"></select></label>
+                    </div>
+                </fieldset>
+                <fieldset class="grupo-data">
+                    <legend>Data término</legend>
+                    <div class="data-campos">
+                        <label>Dia <select id="fim-dia"></select></label>
+                        <label>Mês <select id="fim-mes"></select></label>
+                        <label>Ano <select id="fim-ano"></select></label>
+                    </div>
+                </fieldset>
+                <div class="info-dias">
+                    <span>Dias solicitados:</span>
+                    <strong id="dias-calculados">—</strong>
+                </div>
+                <button type="submit" class="btn-primary">Solicitar férias</button>
+            </form>
+        </section>
+
+        <section class="card">
+            <h2>Solicitações e aprovações</h2>
+            <div id="lista-solicitacoes" class="lista"></div>
+        </section>
+    </main>
+
+    <div id="toast" class="toast hidden"></div>
+
+    <script src="js/config.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/datas.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
